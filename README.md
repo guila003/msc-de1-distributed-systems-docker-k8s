@@ -89,3 +89,86 @@ Feel free to contribute to this project by opening issues or submitting pull req
 - Special thanks to the Flask community for providing a fantastic web framework.
 
 Enjoy experimenting with the Flask sample app! If you have any questions or need further assistance, please don't hesitate to reach out.
+## Published Docker image
+
+Public Docker Hub repository: https://hub.docker.com/r/henry178/msc-de1-flask-app
+
+The tested image is `henry178/msc-de1-flask-app:1.0.0`.
+The `latest` tag currently points to the same image.
+
+To pull and run the published version:
+
+```bash
+docker pull henry178/msc-de1-flask-app:1.0.0
+docker run --rm -p 5000:5000 henry178/msc-de1-flask-app:1.0.0 ```
+
+## Docker Compose
+
+From the repository root:
+
+```cmd
+docker compose up --build -d
+docker compose ps
+curl http://localhost:5000/
+docker compose down
+```
+
+The container runs as UID 10001 and includes a health check.
+
+## Local Kubernetes deployment
+
+Requirements: Docker Desktop, kind and kubectl. The cluster configuration is in `kind/kind-config.yaml` and creates one control-plane node and two workers.
+
+```cmd
+kind create cluster --name msc-de1 --config kind\kind-config.yaml --wait 10m
+kubectl get nodes --context kind-msc-de1
+kubectl apply -f k8s\app.yaml --context kind-msc-de1
+kubectl apply -f k8s\service.yaml --context kind-msc-de1
+kubectl apply -f k8s\network-policy.yaml --context kind-msc-de1
+kubectl rollout status deployment/flask-app -n msc-de1 --context kind-msc-de1
+kubectl get pods,service -n msc-de1 --context kind-msc-de1
+```
+
+To access the API, keep this command running in one terminal:
+
+```cmd
+kubectl port-forward service/flask-app 5001:5000 -n msc-de1 --context kind-msc-de1
+```
+
+In another terminal:
+
+```cmd
+curl http://localhost:5001/
+curl http://localhost:5001/items
+```
+
+The Deployment runs two replicas of the public Docker Hub image `henry178/msc-de1-flask-app:1.0.0`. It defines health probes, resource requests and limits, a non-root user and a read-only root filesystem.
+
+## Kubernetes verification
+
+Scaling from two replicas to three and back:
+
+```cmd
+kubectl scale deployment/flask-app --replicas=3 -n msc-de1 --context kind-msc-de1
+kubectl get pods -n msc-de1 -o wide --context kind-msc-de1
+kubectl scale deployment/flask-app --replicas=2 -n msc-de1 --context kind-msc-de1
+```
+
+Self-healing was verified by deleting one application Pod and observing that the Deployment created a replacement.
+
+A rolling update was performed with image `henry178/msc-de1-flask-app:1.0.1`, followed by a rollback to `1.0.0`:
+
+```cmd
+kubectl set image deployment/flask-app flask-app=henry178/msc-de1-flask-app:1.0.1 -n msc-de1 --context kind-msc-de1
+kubectl rollout status deployment/flask-app -n msc-de1 --context kind-msc-de1
+kubectl rollout undo deployment/flask-app -n msc-de1 --context kind-msc-de1
+kubectl rollout status deployment/flask-app -n msc-de1 --context kind-msc-de1
+```
+
+Version `1.0.1` was built with a version label to demonstrate the rollout; it does not change application functionality.
+
+## Security and limitations
+
+The Docker Scout scan and SPDX SBOM are available in `security/`. The scan is a snapshot of the image at the time of analysis; its findings should be reviewed before a production deployment.
+
+The application's item list is held in process memory. Data is therefore not shared or persisted across Kubernetes replicas. The NetworkPolicy manifest is included, but network isolation requires a CNI that enforces NetworkPolicy; applying the manifest alone does not verify enforcement.
