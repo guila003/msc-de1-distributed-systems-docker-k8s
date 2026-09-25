@@ -172,3 +172,11 @@ Version `1.0.1` was built with a version label to demonstrate the rollout; it do
 The Docker Scout scan and SPDX SBOM are available in `security/`. The scan is a snapshot of the image at the time of analysis; its findings should be reviewed before a production deployment.
 
 The application's item list is held in process memory. Data is therefore not shared or persisted across Kubernetes replicas. The NetworkPolicy manifest is included, but network isolation requires a CNI that enforces NetworkPolicy; applying the manifest alone does not verify enforcement.
+
+## Clean up the local cluster
+
+When you have finished testing, delete the kind cluster:
+
+```cmd
+kind delete cluster --name msc-de1
+```
